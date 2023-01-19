@@ -3,7 +3,7 @@ Subroutine Calc_Conv_Dif_T (NI, NJ, V, T, CellVolume, IFaceVector,JFaceVector,IF
     integer :: NI, NJ, I, J
     integer :: Iter
     Real :: Re, Pr, SCHEME, CFL, VNM
-    Real :: maxRes, Eps, dx,dy, dTimeConv, dTimeDiff
+    Real :: maxRes, Eps, dx,dy, dTimeConvX, dTimeDiffX, dTimeConvY, dTimeDiffY, deltaTimeX, deltaTimeY
     Real :: TLeft, TRight
     Real :: nu, H, U, coefDiff
     Real,Dimension(NI-1,NJ-1):: CellVolume
@@ -13,7 +13,7 @@ Subroutine Calc_Conv_Dif_T (NI, NJ, V, T, CellVolume, IFaceVector,JFaceVector,IF
     Real,Dimension(0:NI,0:NJ,2) :: V
     Real,Dimension(0:NI,0:NJ) :: Res, T
 
-    Real,allocatable,dimension(:,:) ::  deltaTime
+    Real,allocatable,dimension(:,:) :: deltaTime
     Real,allocatable,dimension(:,:) :: DivTV
     Real,allocatable,dimension(:,:,:)::GradT
     Real,allocatable,dimension(:,:):: LaplacianT
@@ -30,7 +30,7 @@ Subroutine Calc_Conv_Dif_T (NI, NJ, V, T, CellVolume, IFaceVector,JFaceVector,IF
     Re = 100
     Pr = 0.7
     maxRes = 1.0
-    Eps = 1.E-7
+    Eps = 1.E-1
 
     Iter = 0
     T(:,:) = (TLeft + TRight)/2.0
@@ -38,18 +38,29 @@ Subroutine Calc_Conv_Dif_T (NI, NJ, V, T, CellVolume, IFaceVector,JFaceVector,IF
     CFL = 0.4
     VNM = 0.4
     nu = U * H / Re
-    coefDiff = nu / Pr
+    !coefDiff = nu / Pr
+    coefDiff = 1.0/Re/Pr
 
     DO J =1, NJ-1
       DO I=1, NI-1
         dx = abs((IFaceCenter(I+1,J,1) - IFaceCenter(I,J,1)))
         dy = abs((JFaceCenter(I,J+1,2) - JFaceCenter(I,J,2)))
-        dTimeConv = CFL * min (dx/Norm2(V(I,J,:)), dy/Norm2(V(I,J,:)))
-        dTimeDiff = VNM * min(dx*dx, dy*dy)/2.0/coefDiff
-        deltaTime(I,J) = dTimeConv*dTimeDiff/(dTimeConv+dTimeDiff)
+        dTimeConvX = CFL * dx/abs(V(I,J,1))
+        dTimeDiffX = VNM * dx*dx/2.0/coefDiff
+
+        dTimeConvY = CFL * dy/abs(V(I,J,2))
+        dTimeDiffY = VNM * dy*dy/2.0/coefDiff
+
+        deltaTimeX = dTimeConvX*dTimeDiffX/(dTimeConvX+dTimeDiffX)
+        deltaTimeY = dTimeConvY*dTimeDiffY/(dTimeConvY+dTimeDiffY)
+
+        deltaTime(I,J) = min(deltaTimeX, deltaTimeY)
       END DO
     END DO
+
     write(*,*)maxval(deltaTime)
+
+    !deltaTime(:,:) = 0.002
 !pause
     DO WHILE(maxRes .GE. Eps)
 
@@ -69,9 +80,9 @@ Subroutine Calc_Conv_Dif_T (NI, NJ, V, T, CellVolume, IFaceVector,JFaceVector,IF
 
 
         maxRes = maxval(abs(Res(1:NI-1, 1:NJ-1)))
-        if (MOD(Iter, 500) .EQ. 0) then
+        !if (MOD(Iter, 500) .EQ. 0) then
             Write(*,*) Iter, maxRes
-        end if
+       ! end if
     END DO
 
     Deallocate(DivTV, GradT, LaplacianT, deltaTime)
